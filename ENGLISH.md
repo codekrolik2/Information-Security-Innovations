@@ -1,0 +1,51 @@
+## Reverse Service Authentication in Vault / K8s
+
+Vault has a feature called Kubernetes authentication, which is the foundation of technologies like the Vault Agent Sidecar
+Injector and the broader ecosystem of how secrets are retrieved from Vault and injected into containers at init time.
+
+This approach works, but only for pulling secrets. If we pull something from somewhere—especially if someone manually
+generated and stored it—there’s a high chance that those secrets were already stolen before we even got them, for
+example, by a specially trained Google expert with a backdoor into your GKE and Chrome.
+
+Thus, the only things that should ever be pushed or pulled are public keys (typically in the form of certificates), and even
+then, with extreme caution.
+
+Now, if our service is not just a simple proxy moving requests back and forth but an actual service doing useful work,
+then it’s not the service that needs secrets—rather, its secrets are needed by those who want to access it. For such a
+service, it would be foolish to require an admin to set a password, share it everywhere, and expose it to theft and MITM
+attacks. Instead, the service should generate its own certificate, share only the public key, and accept traffic exclusively
+over TLS. Determining who is allowed to send traffic is a separate discussion.
+
+This approach effectively results in "reverse" authentication or "reverse" secret distribution. Instead of a service obtaining
+compromised tokens of unclear origin, it instead publishes its public key—generated at init time and, at least initially,
+uncompromised. The challenge is not how to generate it or even how to prevent its compromise in the cloud (which is an
+issue but outside this discussion); rather, the real question is how to publish it securely. After all, if a cybercriminal can
+swap the published key with their own, they can once again enable MITM attacks.
+
+Vault Agent is irrelevant here—it can only pull text-based junk from Vault, which is no longer viable in 2025. Just discard
+the Agent and never use it. However, Kubernetes auth is useful, as it allows us to authenticate in Vault via a client. Vault
+itself is not useless—only the secrets naïve users upload to it are, since those were stolen long before they even reached
+Vault. Assuming the Kubernetes auth mechanism works as intended (otherwise, this whole approach is impossible), we
+can leverage it to store our public key in Vault at an unpredictable moment—during the container’s creation and
+initialization—catching potential attackers off guard. Now, the key is in Vault, and since we only have permission to create
+(not update), even if an attacker intercepts Kubernetes JWTs, it’s too late—the publish action is already done (TODO:
+verify this in practice).
+
+The next step is ensuring that authorized clients can retrieve this key, along with additional metadata like service
+discovery info, IPs, etc., all signed, of course. Clients authenticate to Vault, using certificates—not just any certificates
+that criminals can steal as easily as plaintext password files from a desktop, but PKCS#11-backed certificates. Since Vault
+clients are funded by certain "interested parties," they predictably do not support PKCS#11 (requesting support is
+pointless—they will just tell you it's outdated and that the trendy approach is to hand over all your secrets to them). So,
+this must be done via the REST API.
+
+Since we have planned everything carefully, this operation involves a wrapped token. If an attacker somehow intercepts
+it inside Vault, they get nothing, and we trigger a nuclear strike on the container before it can even be used. But if we
+retrieve the token, then the attacker gets nothing—making Vault a critical piece of this scheme.
+
+Now, in an ideal world, we securely obtain the real key from our service, and it has not been tampered with by
+cybercriminals, meaning MITM attacks are no longer feasible. We must start using the key before it gets cracked by a
+quantum processor or before our container is compromised. Since we have a client-side PKCS#11 certificate, our service
+will reject mass port-scanning cyber-thugs because it recognizes our cert before installation and enforces mTLS, like all
+infection-free systems. However, this setup is only a temporary measure—it must be regularly updated by rotating
+certificates and deploying new services. This could be done every minute or every connection, though that's impractical.
+A reasonable approach must be found—Istio, for instance, rotates certificates daily.
