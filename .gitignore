@@ -1,0 +1,9 @@
+# IDE
+*.iml
+.idea/
+*.log
+
+# OS
+.DS_Store
+
+generated
