@@ -12,7 +12,7 @@ This repository contains several documents authored by me related to authenticat
 ### 2. Shamir’s Algorithm with PKI Support
 
 - [Shamir’s Algorithm with PKI Support](./2.%20Shamir’s%20Algorithm%20with%20PKI%20Support.md)
--[Алгоритм Шамира с поддержкой PKI](./2.%20Алгоритм%20Шамира%20с%20поддержкой%20PKI.md)
+- [Алгоритм Шамира с поддержкой PKI](./2.%20Алгоритм%20Шамира%20с%20поддержкой%20PKI.md)
 
 
 ### 3. Improvements to Secret Management System (over Vault)
